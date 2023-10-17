@@ -8,7 +8,7 @@ OBJ := $(SRC:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 CPPFLAGS := -Iinclude -MMD -MP 
 CFLAGS   := -Wall `pkg-config --cflags --libs gstreamer-1.0`
-LDFLAGS  := -Llib `pkg-config --cflags --libs gstreamer-1.0`
+LDFLAGS  := -Llib
 LDLIBS   := -lm `pkg-config --cflags --libs gstreamer-1.0`
 CC := gcc
 

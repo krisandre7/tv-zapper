@@ -178,8 +178,6 @@ int main(int argc, char const *argv[]) {
   }
   PlayerStart(&player);
 
-  unsigned char sample[] = {0xFF, 0xFF, 0xFF, 0xFF};
-
   int demux;
   if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
     perror("DEMUX DEVICE: ");
@@ -230,9 +228,10 @@ int main(int argc, char const *argv[]) {
 
   while(1) {
     int bytes_read = read(dvr, data_buffer,4096);
-    if (bytes_read > 0) {
-      InjectData(&player, data_buffer, bytes_read);
-    }
+    
+    // if (bytes_read > 0) {
+    //   InjectData(&player, data_buffer, bytes_read);
+    // }
   }
 
   free(buffer);
