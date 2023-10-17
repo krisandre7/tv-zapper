@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "player.h"
+#include "channel_parser.h"
 
 #define FRONTEND_PATH "/dev/dvb/adapter0/frontend0"
 #define DEMUX_PATH "/dev/dvb/adapter0/demux0"
@@ -51,13 +52,13 @@ void u16_node_push(u16_node_t **head, unsigned short value) {
   last->next = new_node;
 }
 
-static double currentTimeMillis() {
+static double current_time_millis() {
   struct timeval tv;
   gettimeofday(&tv, (struct timezone *)NULL);
   return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
 }
 
-int isFeLocked(int fd) {
+int is_fe_locked(int fd) {
   fe_status_t status = 0;
   static int state = 0;
   if ((ioctl(fd, FE_READ_STATUS, &status) < 0)) {
@@ -91,7 +92,7 @@ int isFeLocked(int fd) {
   return 0;
 }
 
-int ParsePat(char *data, unsigned size) {
+int parse_pat(char *data, unsigned size) {
   unsigned tableId = *data;
   data++;
   unsigned short sectionLength = ((data[0] << 8) | (data[1])) & 0x0FFF;
@@ -121,6 +122,7 @@ int ParsePat(char *data, unsigned size) {
 
   u16_node_print(pmtList);
 
+  return 0;
 }
 
 int tune(unsigned int frequency) {
@@ -146,9 +148,9 @@ int tune(unsigned int frequency) {
     return -1;
   }
 
-  double tuneClock = currentTimeMillis();
-  while ((currentTimeMillis() - tuneClock) < tune_timeout) {
-    if (isFeLocked(fd)) {
+  double tune_clock = current_time_millis();
+  while ((current_time_millis() - tune_clock) < tune_timeout) {
+    if (is_fe_locked(fd)) {
       printf("Tuner Locked\n");
       return 0;
     }
@@ -156,85 +158,101 @@ int tune(unsigned int frequency) {
   return -1;
 }
 
-int main(int argc, char const *argv[]) {
-  int frequency;
+int main(int argc, char *argv[]) {
+  char *channel_file;
+  // int frequency = 0;
 
-  if (argc < 2) {
-    printf("Usage: exemplo3 <frequency in Hz>\n");
+  if (argc > 2) {
+    printf("Usage: main channel_file\n");
     return -1;
-  }
-  sscanf(argv[1], "%d", &frequency);
-
-  if (tune(frequency) < 0) {
-    printf("Timeout\n");
-    return -1;
-  }
-
-  player_t player;
-
-  if (PlayerInit(&player) < 0) {
-    printf("Player Init Failed\n");
-    return -1;
-  }
-  PlayerStart(&player);
-
-  int demux;
-  if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
-    perror("DEMUX DEVICE: ");
-    return -1;
+  } else if (argc == 2) {
+    strcpy(channel_file, argv[1]);
+  } else {
+    channel_file = "dvb_channel.conf";
   }
 
-  struct dmx_sct_filter_params sctFilterParams;
-  memset(&sctFilterParams.filter, 0, sizeof(sctFilterParams.filter));
-  sctFilterParams.pid = 0;
-  sctFilterParams.timeout = 2000;
-  sctFilterParams.flags = DMX_IMMEDIATE_START | DMX_ONESHOT;
+  struct ChannelList channel_list;
+  channel_list = parse_channels(channel_file);
 
-  if (ioctl(demux, DMX_SET_FILTER, &sctFilterParams) < 0) {
-    perror("DEMUX DEVICE: ");
-    return -1;
-  }
+  print_channel_list(&channel_list);
 
-  char *buffer = (char *)malloc(BUFFER_SIZE);
+  // printQueue(&channelQueue);
 
-  int bytesRead = read(demux, buffer, BUFFER_SIZE);
-  if (bytesRead <= 0) {
-    printf("No section received\n");
-    free(buffer);
-    return -1;
-  }
-  printf("Section of size %d\n", bytesRead);
-  ParsePat(buffer, bytesRead);
+  // if (channel_count == -1)
+  //   return -1;
 
-  struct dmx_pes_filter_params pesFilterParams;
-  pesFilterParams.pid = 0x2000;
-  pesFilterParams.pes_type = DMX_PES_VIDEO;
-  pesFilterParams.input = DMX_IN_FRONTEND;
-  pesFilterParams.output = DMX_OUT_TS_TAP;
-  pesFilterParams.flags = DMX_IMMEDIATE_START | DMX_CHECK_CRC;  
+  // if (tune(frequency) < 0) {
+  //   printf("Timeout\n");
+  //   return -1;
+  // }
 
-  if (ioctl(demux, DMX_SET_PES_FILTER, &pesFilterParams) < 0) {
-    perror("DEMUX DMX_SET_PES_FILTER: ");
-    return -1;
-  }
+  // player_t player;
 
-  int dvr;
-  if ((dvr = open(DVR_PATH, O_RDONLY)) < 0) {
-    perror("DVR DEVICE: ");
-    return -1;
-  }
+  // if (PlayerInit(&player) < 0) {
+  //   printf("Player Init Failed\n");
+  //   return -1;
+  // }
+  // PlayerStart(&player);
 
-  char data_buffer[4096];
+  // int demux;
+  // if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
+  //   perror("DEMUX DEVICE: ");
+  //   return -1;
+  // }
 
-  while(1) {
-    int bytes_read = read(dvr, data_buffer,4096);
+  // struct dmx_sct_filter_params sctFilterParams;
+  // memset(&sctFilterParams.filter, 0, sizeof(sctFilterParams.filter));
+  // sctFilterParams.pid = 0;
+  // sctFilterParams.timeout = 2000;
+  // sctFilterParams.flags = DMX_IMMEDIATE_START | DMX_ONESHOT;
+
+  // if (ioctl(demux, DMX_SET_FILTER, &sctFilterParams) < 0) {
+  //   perror("DEMUX DEVICE: ");
+  //   return -1;
+  // }
+
+  // char *buffer = (char *)malloc(BUFFER_SIZE);
+
+  // int bytesRead = read(demux, buffer, BUFFER_SIZE);
+  // if (bytesRead <= 0) {
+  //   printf("No section received\n");
+  //   free(buffer);
+  //   return -1;
+  // }
+  // printf("Section of size %d\n", bytesRead);
+  // parse_pat(buffer, bytesRead);
+
+  // struct dmx_pes_filter_params pesFilterParams;
+  // pesFilterParams.pid = 0x2000;
+  // pesFilterParams.pes_type = DMX_PES_VIDEO;
+  // pesFilterParams.input = DMX_IN_FRONTEND;
+  // pesFilterParams.output = DMX_OUT_TS_TAP;
+  // pesFilterParams.flags = DMX_IMMEDIATE_START | DMX_CHECK_CRC;  
+
+  // if (ioctl(demux, DMX_SET_PES_FILTER, &pesFilterParams) < 0) {
+  //   perror("DEMUX DMX_SET_PES_FILTER: ");
+  //   return -1;
+  // }
+
+  // int dvr;
+  // if ((dvr = open(DVR_PATH, O_RDONLY)) < 0) {
+  //   perror("DVR DEVICE: ");
+  //   return -1;
+  // }
+
+  // char data_buffer[4096];
+
+  // while(1) {
+  //   int bytes_read = read(dvr, data_buffer,4096);
     
-    // if (bytes_read > 0) {
-    //   InjectData(&player, data_buffer, bytes_read);
-    // }
-  }
+  //   // if (bytes_read > 0) {
+  //   //   InjectData(&player, data_buffer, bytes_read);
+  //   // }
+  // }
 
-  free(buffer);
-  close(demux);
+  // free_channel_list(&channel_list);
+
+  // free(buffer);
+  // close(demux);
   return 0;
 }
