@@ -1,0 +1,9 @@
+.vscode
+dvbapi
+gstreamer
+*.config
+*.conf
+*.txt
+obj/*
+lib/*
+main
