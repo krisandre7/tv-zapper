@@ -7,3 +7,4 @@ gstreamer
 obj/*
 lib/*
 main
+streamer
