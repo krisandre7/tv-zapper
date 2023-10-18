@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
+#include <termios.h>
+#include <ctype.h> // Include ctype.h for character case conversion
 
 #include "player.h"
 #include "channel_parser.h"
@@ -17,39 +20,33 @@ const int TUNE_TIMEOUT = 3000;
 
 int main(int argc, char *argv[]) {
   char *channel_file;
-  // int frequency = 0;
 
   if (argc > 2) {
     printf("Usage: main channel_file\n");
     return -1;
   } else if (argc == 2) {
-    strcpy(channel_file, argv[1]);
+    channel_file = argv[1];
   } else {
     channel_file = "dvb_channel.conf";
   }
 
   struct ChannelList channel_list = parse_channels(channel_file);
-
   struct ChannelListNode *current_node = channel_list.head;
 
   printf("Current Channel: %s\n", current_node->data.name);
 
-  // Acessa frontend
-  int fd;  // Mova a declaração do descritor de arquivo do frontend para fora do loop
-
+  int fd;
   if ((fd = open(FRONTEND_PATH, O_RDWR)) < 0) {
-      perror("FRONTEND DEVICE: ");
-      return -1;
+    perror("FRONTEND DEVICE: ");
+    return -1;
   }
 
-  // Inicia player
   player_t player;
   if (PlayerInit(&player) < 0) {
     printf("Player Init Failed\n");
     return -1;
   }
 
-  // Acessa demux
   int demux;
   if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
     perror("DEMUX DEVICE: ");
@@ -68,45 +65,85 @@ int main(int argc, char *argv[]) {
     perror("Não foi possível configurar demux");
   }
 
-  bool playing = false;
-  char data_buffer[DATA_BUFFER_SIZE];
+  PlayerStart(&player);
 
-  printf("Enter 'q' to quit, 'u' to tune up, 'd' to tune down: ");
+  if (tune(fd, current_node->data.frequency) < 0) {
+    perror("Não foi possível sintonizar o canal.");
+    return -1;
+  }
+
+  const unsigned char data_buffer[DATA_BUFFER_SIZE];
+
+  struct termios termios_original;
+  tcgetattr(STDIN_FILENO, &termios_original);
+  struct termios termios_modified = termios_original;
+  termios_modified.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &termios_modified);
+
+  fd_set fds;
+  struct timeval tv;
+  int stdin_fd = STDIN_FILENO;
+
   while (1) {
-    if (!playing) {
-      PlayerStart(&player);
-      
-      if (tune(fd, current_node->data.frequency) < 0) {
-        perror("Não foi possível sintonizar o canal.");
-        return -1;
-      }
+    FD_ZERO(&fds);
+    FD_SET(stdin_fd, &fds);
 
-      playing = true;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    int ready = select(stdin_fd + 1, &fds, NULL, NULL, &tv);
+
+    if (ready == -1) {
+      perror("select");
+      break;
+    } else if (ready > 0) {
+      if (FD_ISSET(stdin_fd, &fds)) {
+        char input;
+        ssize_t bytes = read(stdin_fd, &input, 1);
+        if (bytes == 1) {
+          // Handle user input
+          if (input == 'q') {
+            printf("Exiting...\n");
+            break;
+          } else if (input == 'u') {
+            // Move to the next channel node
+            current_node = current_node->next;
+            printf("Current Channel: %s\n", current_node->data.name);
+
+            // PlayerStop(&player);
+            // PlayerRestart(&player);
+
+            if (tune(fd, current_node->data.frequency) < 0) {
+              perror("Não foi possível sintonizar o canal.");
+            }
+
+            // PlayerStart(&player);
+          } else if (input == 'd') {
+            // Move to the previous channel node
+            current_node = current_node->prev;
+            printf("Current Channel: %s\n", current_node->data.name);
+
+            // PlayerStop(&player);
+            // PlayerRestart(&player);
+
+            if (tune(fd, current_node->data.frequency) < 0) {
+              perror("Não foi possível sintonizar o canal.");
+            }
+
+            // PlayerStart(&player);
+          }
+        }
+      }
     }
 
-      // char input = getchar();
-
-      // switch (input) {
-      //   case 'q':
-      //     goto exit_loop;
-      //     break;
-      //   case 'u':
-      //     current_node = current_node->next;
-      //     printf("%s\n", current_node->data.name); 
-      //     break;
-      //   case 'd':
-      //     current_node = current_node->prev;
-      //     printf("%s\n", current_node->data.name); 
-      //     break;
-      // }
-
     bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
-    
+
     if (bytes_read > 0) {
       InjectData(&player, data_buffer, bytes_read);
     }
+  }
 
-  } exit_loop: ;
+  tcsetattr(STDIN_FILENO, TCSANOW, &termios_original);
 
   PlayerStop(&player);
   free_channel_list(&channel_list);
