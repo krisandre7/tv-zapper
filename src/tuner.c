@@ -2,11 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 
 #include "tuner.h"
 
 const unsigned CRC_SIZE = 4;
 const int tune_timeout = 3000;
+
+static double current_time_millis() {
+  struct timeval tv;
+  gettimeofday(&tv, (struct timezone *)NULL);
+  return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
+}
 
 void u16_node_print(u16_node_t *head) {
   u16_node_t *current = head;

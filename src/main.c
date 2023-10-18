@@ -1,11 +1,7 @@
 #include <fcntl.h>
-#include <linux/dvb/frontend.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
-#include <unistd.h>
 
 #include "player.h"
 #include "channel_parser.h"
@@ -17,6 +13,7 @@
 #define DVR_PATH "/dev/dvb/adapter0/dvr0"
 
 #define DATA_BUFFER_SIZE 4096
+const int TUNE_TIMEOUT = 3000;
 
 int main(int argc, char *argv[]) {
   char *channel_file;
@@ -73,8 +70,10 @@ int main(int argc, char *argv[]) {
 
   bool playing = false;
   char data_buffer[DATA_BUFFER_SIZE];
+
+  printf("Enter 'q' to quit, 'u' to tune up, 'd' to tune down: ");
   while (1) {
-    if (playing == false) {
+    if (!playing) {
       PlayerStart(&player);
       
       if (tune(fd, current_node->data.frequency) < 0) {
@@ -85,23 +84,21 @@ int main(int argc, char *argv[]) {
       playing = true;
     }
 
-    // printf("Enter 'q' to quit, 'u' to tune up, 'd' to tune down: ");
-    // char input = getchar();
+      // char input = getchar();
 
-    // switch (input)
-    // {
-    //   case 'q':
-    //     goto exit_loop;
-    //     break;
-    //   case 'u':
-    //     current_node = current_node->next;
-    //     printf("%s\n", current_node->data.name); 
-    //     break;
-    //   case 'd':
-    //     current_node = current_node->prev;
-    //     printf("%s\n", current_node->data.name); 
-    //     break;
-    // } 
+      // switch (input) {
+      //   case 'q':
+      //     goto exit_loop;
+      //     break;
+      //   case 'u':
+      //     current_node = current_node->next;
+      //     printf("%s\n", current_node->data.name); 
+      //     break;
+      //   case 'd':
+      //     current_node = current_node->prev;
+      //     printf("%s\n", current_node->data.name); 
+      //     break;
+      // }
 
     bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
     

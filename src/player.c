@@ -4,12 +4,12 @@
 
 
 
-static void pad_added_handler(GstElement *src, GstPad *new_pad,
-                              player_t *data) {
-  printf("Pad added!\n");
-  GstCaps *new_pad_caps = NULL;
-  new_pad_caps = gst_pad_get_current_caps(new_pad);
-}
+// static void pad_added_handler(GstElement *src, GstPad *new_pad,
+//                               player_t *data) {
+//   printf("Pad added!\n");
+//   GstCaps *new_pad_caps = NULL;
+//   new_pad_caps = gst_pad_get_current_caps(new_pad);
+// }
 
 static GstBusSyncReply bus_sync_handler(GstBus *bus, GstMessage *message,
                                         player_t *data) {
@@ -47,7 +47,11 @@ int PlayerInit(player_t *player) {
 int PlayerStart(player_t *player) {
   if (player->pipeline) {
     gst_element_set_state(player->pipeline, GST_STATE_PLAYING);
+
+    return 0;
   }
+
+  return -1;
 }
 
 int InjectData(player_t *player, const unsigned char *data, unsigned int size) {
@@ -76,22 +80,19 @@ int InjectData(player_t *player, const unsigned char *data, unsigned int size) {
   return size;
 }
 
-//TODO
 int PlayerStop(player_t *player) {
   if (player->pipeline) {
     gst_element_set_state(player->pipeline, GST_STATE_PAUSED);
     return 0;
   }
-  return -1; // Indica que não foi possível parar a reprodução.
+  return -1;
 }
 int PlayerRestart(player_t *player) {
   if (player->pipeline) {
-    // Primeiro, pare o pipeline.
     gst_element_set_state(player->pipeline, GST_STATE_NULL);
     
-    // Em seguida, defina o estado para GST_STATE_PLAYING (ou outro estado apropriado).
     gst_element_set_state(player->pipeline, GST_STATE_PLAYING);
     return 0;
   }
-  return -1; // Indica que não foi possível reiniciar o pipeline.
+  return -1;
 }
