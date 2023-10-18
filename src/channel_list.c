@@ -12,7 +12,7 @@ bool is_channel_list_empty(struct ChannelList *list) {
 }
 
 void insert_channel(struct ChannelList *list, struct Channel new_channel) {
-    struct Node *new_node = (struct Node *)malloc(sizeof(struct Node));
+    struct ChannelListNode *new_node = (struct ChannelListNode *)malloc(sizeof(struct ChannelListNode));
     if (new_node == NULL) {
         fprintf(stderr, "Memory allocation failed.\n");
         exit(1);
@@ -24,7 +24,7 @@ void insert_channel(struct ChannelList *list, struct Channel new_channel) {
         new_node->prev = new_node;
         list->head = new_node;
     } else {
-        struct Node *tail = list->head->prev;
+        struct ChannelListNode *tail = list->head->prev;
         new_node->next = list->head;
         new_node->prev = tail;
         list->head->prev = new_node;
@@ -38,18 +38,18 @@ void print_channel_list(struct ChannelList *list) {
         return;
     }
 
-    struct Node *current = list->head;
+    struct ChannelListNode *current = list->head;
     do {
         print_channel(&current->data);
         current = current->next;
     } while (current != list->head);
 }
 
-struct Node *get_next_node(struct ChannelList *list, struct Node *current) {
+struct ChannelListNode *get_next_node(struct ChannelList *list, struct ChannelListNode *current) {
     return current->next;
 }
 
-struct Node *get_prev_node(struct ChannelList *list, struct Node *current) {
+struct ChannelListNode *get_prev_node(struct ChannelList *list, struct ChannelListNode *current) {
     return current->prev;
 }
 
@@ -58,8 +58,8 @@ void free_channel_list(struct ChannelList *list) {
         return; // List is already empty
     }
 
-    struct Node *current = list->head;
-    struct Node *temp;
+    struct ChannelListNode *current = list->head;
+    struct ChannelListNode *temp;
 
     do {
         temp = current;

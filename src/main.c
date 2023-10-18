@@ -171,10 +171,26 @@ int main(int argc, char *argv[]) {
     channel_file = "dvb_channel.conf";
   }
 
-  struct ChannelList channel_list;
-  channel_list = parse_channels(channel_file);
+  struct ChannelList channel_list = parse_channels(channel_file);
 
-  print_channel_list(&channel_list);
+  struct ChannelListNode *current_node = channel_list.head;
+
+  printf("Current Channel: %s\n", current_node->data.name);
+
+  while (1) {
+    printf("Enter 'q' to quit, 'u' to tune up, 'd' to tune down: ");
+    char input = getchar();
+
+    if (input == 'q') {
+        break;
+    } else if (input == 'u') {
+      current_node = current_node->next;
+      printf("%s\n", current_node->data.name); 
+    } else if (input == 'd') {
+      current_node = current_node->prev;
+      printf("%s\n", current_node->data.name); 
+    }
+  }
 
   // printQueue(&channelQueue);
 
@@ -250,7 +266,7 @@ int main(int argc, char *argv[]) {
   //   // }
   // }
 
-  // free_channel_list(&channel_list);
+  free_channel_list(&channel_list);
 
   // free(buffer);
   // close(demux);
