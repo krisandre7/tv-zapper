@@ -2,7 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
-
+#include <unistd.h>
+#include <termios.h>
+#include <sys/time.h>
 #include "player.h"
 #include "channel_parser.h"
 #include "tuner.h"
@@ -12,48 +14,60 @@
 #define DEMUX_PATH "/dev/dvb/adapter0/demux0"
 #define DVR_PATH "/dev/dvb/adapter0/dvr0"
 
-#define DATA_BUFFER_SIZE 4096
+#define BUFFER_SIZE 4096
 const int TUNE_TIMEOUT = 3000;
+
+static double currentTimeMillis() {
+  struct timeval tv;
+  gettimeofday(&tv, (struct timezone *)NULL);
+  return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
+}
+
 
 int main(int argc, char *argv[]) {
   char *channel_file;
-  // int frequency = 0;
 
   if (argc > 2) {
     printf("Usage: main channel_file\n");
     return -1;
   } else if (argc == 2) {
-    strcpy(channel_file, argv[1]);
+    channel_file = argv[1];
   } else {
     channel_file = "dvb_channel.conf";
   }
 
   struct ChannelList channel_list = parse_channels(channel_file);
-
   struct ChannelListNode *current_node = channel_list.head;
 
   printf("Current Channel: %s\n", current_node->data.name);
 
-  // Acessa frontend
-  int fd;  // Mova a declaração do descritor de arquivo do frontend para fora do loop
-
-  if ((fd = open(FRONTEND_PATH, O_RDWR)) < 0) {
-      perror("FRONTEND DEVICE: ");
-      return -1;
-  }
-
-  // Inicia player
-  player_t player;
-  if (PlayerInit(&player) < 0) {
-    printf("Player Init Failed\n");
+  int frontend;
+  if ((frontend = open(FRONTEND_PATH, O_RDWR | O_NONBLOCK)) < 0) {
+    perror("FRONTEND OPEN: ");
     return -1;
   }
 
-  // Acessa demux
+  if (tune(frontend, current_node->data.frequency) < 0) {
+    perror("Não foi possível sintonizar o canal.");
+    return -1;
+  }
+
   int demux;
-  if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
-    perror("DEMUX DEVICE: ");
+  if ((demux = open(DEMUX_PATH, O_RDWR|O_NONBLOCK)) < 0) {
+    perror("Couldn't open demux: ");
     return -1;
+  }
+
+
+  int setup = setup_demux(demux);
+  if (setup < 0) {
+    perror("Não foi possível configurar demux");
+  }
+
+  // esperar 5 segundos garante tempo o suficiente para o demuxer
+  // ser criado
+  double tuneClock = currentTimeMillis();
+  while ((currentTimeMillis() - tuneClock) < 5000) {
   }
 
   int dvr;
@@ -62,56 +76,88 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  int buffer = setup_demux(demux);
-  unsigned int bytes_read = 0;
-  if (buffer < 0) {
-    perror("Não foi possível configurar demux");
+  player_t player;
+  if (PlayerInit(&player) < 0) {
+    printf("Player Init Failed\n");
+    return -1;
   }
 
-  bool playing = false;
-  char data_buffer[DATA_BUFFER_SIZE];
+  PlayerStart(&player);
 
-  printf("Enter 'q' to quit, 'u' to tune up, 'd' to tune down: ");
+  struct termios termios_original;
+  tcgetattr(STDIN_FILENO, &termios_original);
+  struct termios termios_modified = termios_original;
+  termios_modified.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &termios_modified);
+
+  fd_set fds;
+  struct timeval tv;
+  int stdin_fd = STDIN_FILENO;
+
+  unsigned data_buffer[BUFFER_SIZE];
   while (1) {
-    if (!playing) {
-      PlayerStart(&player);
-      
-      if (tune(fd, current_node->data.frequency) < 0) {
-        perror("Não foi possível sintonizar o canal.");
-        return -1;
-      }
+    FD_ZERO(&fds);
+    FD_SET(stdin_fd, &fds);
 
-      playing = true;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    int ready = select(stdin_fd + 1, &fds, NULL, NULL, &tv);
+
+    if (ready == -1) {
+      perror("select");
+      break;
+    } else if (ready > 0) {
+      if (FD_ISSET(stdin_fd, &fds)) {
+        char input;
+        ssize_t bytes = read(stdin_fd, &input, 1);
+        if (bytes == 1) {
+          // Handle user input
+          if (input == 'q') {
+            printf("Exiting...\n");
+            break;
+          } else if (input == 'u') {
+            // Move to the next channel node
+            current_node = current_node->next;
+            printf("Current Channel: %s\n", current_node->data.name);
+
+            if (tune(frontend, current_node->data.frequency) < 0) {
+              perror("Não foi possível sintonizar o canal.");
+            }
+
+            PlayerStop(&player);
+            PlayerRestart(&player);
+            PlayerStart(&player);
+          } else if (input == 'd') {
+            // Move to the previous channel node
+            current_node = current_node->prev;
+            printf("Current Channel: %s\n", current_node->data.name);
+
+            if (tune(frontend, current_node->data.frequency) < 0) {
+              perror("Não foi possível sintonizar o canal.");
+            }
+
+            PlayerStop(&player);
+            PlayerRestart(&player);
+            PlayerStart(&player);
+          }
+        }
+      }
     }
 
-      // char input = getchar();
+    unsigned int bytes_read = read(dvr, data_buffer, BUFFER_SIZE);
 
-      // switch (input) {
-      //   case 'q':
-      //     goto exit_loop;
-      //     break;
-      //   case 'u':
-      //     current_node = current_node->next;
-      //     printf("%s\n", current_node->data.name); 
-      //     break;
-      //   case 'd':
-      //     current_node = current_node->prev;
-      //     printf("%s\n", current_node->data.name); 
-      //     break;
-      // }
-
-    bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
-    
     if (bytes_read > 0) {
       InjectData(&player, data_buffer, bytes_read);
     }
+  }
 
-  } exit_loop: ;
+  tcsetattr(STDIN_FILENO, TCSANOW, &termios_original);
 
   PlayerStop(&player);
   free_channel_list(&channel_list);
 
-  close(fd);
   close(demux);
+  close(frontend);
   return 0;
 }

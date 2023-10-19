@@ -85,14 +85,18 @@ int PlayerStop(player_t *player) {
     gst_element_set_state(player->pipeline, GST_STATE_PAUSED);
     return 0;
   }
+
+  printf("Não foi possível parar o player\n");
   return -1;
 }
 int PlayerRestart(player_t *player) {
   if (player->pipeline) {
-    gst_element_set_state(player->pipeline, GST_STATE_NULL);
+    gst_element_set_state(player->pipeline, GST_STATE_READY);
     
-    gst_element_set_state(player->pipeline, GST_STATE_PLAYING);
+    gst_element_set_state(player->pipeline, GST_STATE_NULL);
     return 0;
   }
+
+  printf("Não foi possível reiniciar o player\n");
   return -1;
 }
