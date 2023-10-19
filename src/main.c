@@ -4,8 +4,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <termios.h>
-#include <ctype.h> // Include ctype.h for character case conversion
-
+#include <sys/time.h>
 #include "player.h"
 #include "channel_parser.h"
 #include "tuner.h"
@@ -15,8 +14,15 @@
 #define DEMUX_PATH "/dev/dvb/adapter0/demux0"
 #define DVR_PATH "/dev/dvb/adapter0/dvr0"
 
-#define DATA_BUFFER_SIZE 4096
+#define BUFFER_SIZE 4096
 const int TUNE_TIMEOUT = 3000;
+
+static double currentTimeMillis() {
+  struct timeval tv;
+  gettimeofday(&tv, (struct timezone *)NULL);
+  return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
+}
+
 
 int main(int argc, char *argv[]) {
   char *channel_file;
@@ -35,8 +41,38 @@ int main(int argc, char *argv[]) {
 
   printf("Current Channel: %s\n", current_node->data.name);
 
-  if (tune(current_node->data.frequency) < 0) {
+  int frontend;
+  if ((frontend = open(FRONTEND_PATH, O_RDWR | O_NONBLOCK)) < 0) {
+    perror("FRONTEND OPEN: ");
+    return -1;
+  }
+
+  if (tune(frontend, current_node->data.frequency) < 0) {
     perror("Não foi possível sintonizar o canal.");
+    return -1;
+  }
+
+  int demux;
+  if ((demux = open(DEMUX_PATH, O_RDWR|O_NONBLOCK)) < 0) {
+    perror("Couldn't open demux: ");
+    return -1;
+  }
+
+
+  int setup = setup_demux(demux);
+  if (setup < 0) {
+    perror("Não foi possível configurar demux");
+  }
+
+  // esperar 5 segundos garante tempo o suficiente para o demuxer
+  // ser criado
+  double tuneClock = currentTimeMillis();
+  while ((currentTimeMillis() - tuneClock) < 5000) {
+  }
+
+  int dvr;
+  if ((dvr = open(DVR_PATH, O_RDONLY)) < 0) {
+    perror("DVR DEVICE: ");
     return -1;
   }
 
@@ -45,25 +81,8 @@ int main(int argc, char *argv[]) {
     printf("Player Init Failed\n");
     return -1;
   }
-  
+
   PlayerStart(&player);
-
-  int demux;
-  if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
-    perror("DEMUX DEVICE: ");
-    return -1;
-  }
-
-  int setup = setup_demux(demux);
-  if (setup < 0) {
-    perror("Não foi possível configurar demux");
-  }
-
-  int dvr;
-  if ((dvr = open(DVR_PATH, O_RDONLY)) < 0) {
-    perror("DVR DEVICE: ");
-    return -1;
-  }
 
   struct termios termios_original;
   tcgetattr(STDIN_FILENO, &termios_original);
@@ -75,6 +94,7 @@ int main(int argc, char *argv[]) {
   struct timeval tv;
   int stdin_fd = STDIN_FILENO;
 
+  unsigned data_buffer[BUFFER_SIZE];
   while (1) {
     FD_ZERO(&fds);
     FD_SET(stdin_fd, &fds);
@@ -101,7 +121,7 @@ int main(int argc, char *argv[]) {
             current_node = current_node->next;
             printf("Current Channel: %s\n", current_node->data.name);
 
-            if (tune(current_node->data.frequency) < 0) {
+            if (tune(frontend, current_node->data.frequency) < 0) {
               perror("Não foi possível sintonizar o canal.");
             }
 
@@ -113,7 +133,7 @@ int main(int argc, char *argv[]) {
             current_node = current_node->prev;
             printf("Current Channel: %s\n", current_node->data.name);
 
-            if (tune(current_node->data.frequency) < 0) {
+            if (tune(frontend, current_node->data.frequency) < 0) {
               perror("Não foi possível sintonizar o canal.");
             }
 
@@ -125,8 +145,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    const unsigned char data_buffer[4096];
-    unsigned int bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
+    unsigned int bytes_read = read(dvr, data_buffer, BUFFER_SIZE);
 
     if (bytes_read > 0) {
       InjectData(&player, data_buffer, bytes_read);
@@ -139,5 +158,6 @@ int main(int argc, char *argv[]) {
   free_channel_list(&channel_list);
 
   close(demux);
+  close(frontend);
   return 0;
 }
