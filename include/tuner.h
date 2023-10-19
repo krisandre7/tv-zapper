@@ -13,4 +13,4 @@ int is_fe_locked(int fd);
 
 int parse_pat(char *data, unsigned size);
 
-int tune(int fd, unsigned int frequency);
+int tune(unsigned int frequency);

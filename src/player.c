@@ -91,9 +91,9 @@ int PlayerStop(player_t *player) {
 }
 int PlayerRestart(player_t *player) {
   if (player->pipeline) {
-    gst_element_set_state(player->pipeline, GST_STATE_NULL);
+    gst_element_set_state(player->pipeline, GST_STATE_READY);
     
-    gst_element_set_state(player->pipeline, GST_STATE_PLAYING);
+    gst_element_set_state(player->pipeline, GST_STATE_NULL);
     return 0;
   }
 

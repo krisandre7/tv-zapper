@@ -35,9 +35,8 @@ int main(int argc, char *argv[]) {
 
   printf("Current Channel: %s\n", current_node->data.name);
 
-  int fd;
-  if ((fd = open(FRONTEND_PATH, O_RDWR)) < 0) {
-    perror("FRONTEND DEVICE: ");
+  if (tune(current_node->data.frequency) < 0) {
+    perror("Não foi possível sintonizar o canal.");
     return -1;
   }
 
@@ -46,6 +45,8 @@ int main(int argc, char *argv[]) {
     printf("Player Init Failed\n");
     return -1;
   }
+  
+  PlayerStart(&player);
 
   int demux;
   if ((demux = open(DEMUX_PATH, O_RDWR)) < 0) {
@@ -53,26 +54,16 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
+  int setup = setup_demux(demux);
+  if (setup < 0) {
+    perror("Não foi possível configurar demux");
+  }
+
   int dvr;
   if ((dvr = open(DVR_PATH, O_RDONLY)) < 0) {
     perror("DVR DEVICE: ");
     return -1;
   }
-
-  int buffer = setup_demux(demux);
-  unsigned int bytes_read = 0;
-  if (buffer < 0) {
-    perror("Não foi possível configurar demux");
-  }
-
-  PlayerStart(&player);
-
-  if (tune(fd, current_node->data.frequency) < 0) {
-    perror("Não foi possível sintonizar o canal.");
-    return -1;
-  }
-
-  const unsigned char data_buffer[DATA_BUFFER_SIZE];
 
   struct termios termios_original;
   tcgetattr(STDIN_FILENO, &termios_original);
@@ -110,33 +101,32 @@ int main(int argc, char *argv[]) {
             current_node = current_node->next;
             printf("Current Channel: %s\n", current_node->data.name);
 
-            // PlayerStop(&player);
-            // PlayerRestart(&player);
-
-            if (tune(fd, current_node->data.frequency) < 0) {
+            if (tune(current_node->data.frequency) < 0) {
               perror("Não foi possível sintonizar o canal.");
             }
 
-            // PlayerStart(&player);
+            PlayerStop(&player);
+            PlayerRestart(&player);
+            PlayerStart(&player);
           } else if (input == 'd') {
             // Move to the previous channel node
             current_node = current_node->prev;
             printf("Current Channel: %s\n", current_node->data.name);
 
-            // PlayerStop(&player);
-            // PlayerRestart(&player);
-
-            if (tune(fd, current_node->data.frequency) < 0) {
+            if (tune(current_node->data.frequency) < 0) {
               perror("Não foi possível sintonizar o canal.");
             }
 
-            // PlayerStart(&player);
+            PlayerStop(&player);
+            PlayerRestart(&player);
+            PlayerStart(&player);
           }
         }
       }
     }
 
-    bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
+    const unsigned char data_buffer[4096];
+    unsigned int bytes_read = read(dvr, data_buffer, DATA_BUFFER_SIZE);
 
     if (bytes_read > 0) {
       InjectData(&player, data_buffer, bytes_read);
@@ -148,7 +138,6 @@ int main(int argc, char *argv[]) {
   PlayerStop(&player);
   free_channel_list(&channel_list);
 
-  close(fd);
   close(demux);
   return 0;
 }

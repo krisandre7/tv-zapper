@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
+#include <fcntl.h>
 
 #include "tuner.h"
 
+#define FRONTEND_PATH "/dev/dvb/adapter0/frontend0"
 const unsigned CRC_SIZE = 4;
 const int tune_timeout = 3000;
 
@@ -110,7 +112,13 @@ int parse_pat(char *data, unsigned size) {
   return 0;
 }
 
-int tune(int fd, unsigned int frequency) {
+int tune(unsigned int frequency) {
+  int fd;
+  if ((fd = open(FRONTEND_PATH, O_RDWR)) < 0) {
+    perror("FRONTEND DEVICE: ");
+    return -1;
+  }
+
   /* Configure dtv_property with tuning fe params */
   struct dtv_property tuning_props_array[] = {
       {.cmd = DTV_DELIVERY_SYSTEM, .u.data = SYS_ISDBT},
@@ -130,8 +138,10 @@ int tune(int fd, unsigned int frequency) {
   while ((current_time_millis() - tune_clock) < tune_timeout) {
     if (is_fe_locked(fd)) {
       printf("Tuner Locked\n");
+      close(fd);
       return 0;
     }
   }
+  close(fd);
   return -1;
 }
