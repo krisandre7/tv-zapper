@@ -94,7 +94,6 @@ int main(int argc, char *argv[]) {
   struct timeval tv;
   int stdin_fd = STDIN_FILENO;
 
-  unsigned data_buffer[BUFFER_SIZE];
   while (1) {
     FD_ZERO(&fds);
     FD_SET(stdin_fd, &fds);
@@ -145,10 +144,15 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    unsigned char data_buffer[BUFFER_SIZE];
     unsigned int bytes_read = read(dvr, data_buffer, BUFFER_SIZE);
 
     if (bytes_read > 0) {
       InjectData(&player, data_buffer, bytes_read);
+    } else if (bytes_read == 0) {
+      printf("No bytes?\n");
+    } else {
+      perror("Error when reading bytes from DVR: ");
     }
   }
 
@@ -159,5 +163,6 @@ int main(int argc, char *argv[]) {
 
   close(demux);
   close(frontend);
+  close(dvr);
   return 0;
 }
