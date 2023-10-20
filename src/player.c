@@ -15,9 +15,9 @@ static GstBusSyncReply bus_sync_handler(GstBus *bus, GstMessage *message,
                                         player_t *data) {
   if (GST_MESSAGE_SRC(message) == GST_OBJECT(data->pipeline)) {
     if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_STATE_CHANGED) {
-      printf("state changed!\n");
-      GstState old_state, new_state;
-      gst_message_parse_state_changed(message, &old_state, &new_state, NULL);
+      GstState old_state, new_state, pending_state;
+      gst_message_parse_state_changed(message, &old_state, &new_state, &pending_state);
+      g_print("Player changed from %s to %s\n", gst_element_state_get_name(old_state), gst_element_state_get_name(new_state));
     }
   }
   return GST_BUS_PASS;
@@ -103,8 +103,8 @@ void PlayerFree(player_t *player) {
 
     if (player->pipeline) {
       // Set the pipeline to NULL state before freeing it
-      gst_element_set_state(player->pipeline, GST_STATE_PAUSED);
-      gst_element_set_state(player->pipeline, GST_STATE_READY);
+      // gst_element_set_state(player->pipeline, GST_STATE_PAUSED);
+      // gst_element_set_state(player->pipeline, GST_STATE_READY);
       gst_element_set_state(player->pipeline, GST_STATE_NULL);
       gst_object_unref(player->pipeline);
       player->pipeline = NULL;

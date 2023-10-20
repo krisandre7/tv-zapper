@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "util.h"
-
 #define DEMUX_PATH "/dev/dvb/adapter0/demux0"
 #define WAIT_TIME 5000
 
@@ -21,8 +19,5 @@ int setup_demux(int demux) {
         perror("DEMUX DMX_SET_PES_FILTER: ");
         return -1;
     }
-
-    wait_milliseconds(WAIT_TIME);
-
     return 0;
 }

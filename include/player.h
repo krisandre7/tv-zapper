@@ -8,6 +8,7 @@ typedef struct player
 
 int PlayerInit(player_t *player);
 int PlayerStart(player_t *player) ;
+int PlayerReady(player_t *player);
 int InjectData(player_t *player, const unsigned char *data, unsigned int size);
 
 int PlayerStop(player_t *player);
